@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+# Arduino and ESP32 specific
+*.svd
+.development
+debug.cfg
+debug.svd
+debug_custom.json
