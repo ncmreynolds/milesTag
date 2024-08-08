@@ -1,0 +1,15 @@
+milesTag KEYWORD1
+
+//Setup
+
+begin	KEYWORD2
+setCarrierFrequency	KEYWORD2
+setDutyCycle	KEYWORD2
+setTransmitPin	KEYWORD2
+setTransmitPins	KEYWORD2
+setReceivePin	KEYWORD2
+setReceivePins	KEYWORD2
+transmitDamage	KEYWORD2
+setPlayerId	KEYWORD2
+setTeamId	KEYWORD2
+debug	KEYWORD2
