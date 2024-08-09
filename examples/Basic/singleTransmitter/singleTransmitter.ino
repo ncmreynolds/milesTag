@@ -13,5 +13,5 @@ void setup() {
 
 void loop() {
   milesTag.transmitDamage();              //Transmit one damage from the first transmitter
-  delay(5e3);
+  delay(10e3);
 }
