@@ -1,5 +1,5 @@
 /*
- * Basic milesTag example, sends 1 damage every 10s from a single transmitter device
+ * Basic milesTag example, sends 1 damage every 5s from a single transmitter device
  */
 
 #include <milesTag.h>                     //Include the milesTag library
@@ -13,5 +13,5 @@ void setup() {
 
 void loop() {
   milesTag.transmitDamage();              //Transmit one damage from the first transmitter
-  delay(10e3);
+  delay(5e3);
 }
