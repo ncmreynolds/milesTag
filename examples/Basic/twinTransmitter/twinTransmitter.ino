@@ -11,7 +11,7 @@
 
 #include <milesTag.h>                         //Include the milesTag library
 
-int8_t emitterPins[2] = {12, 23};             //GPIO pins are in an array
+int8_t emitterPins[2] = {12, 13};             //GPIO pins are in an array
 
 void setup() {
   Serial.begin(115200);                       //Set up Serial for debug output
