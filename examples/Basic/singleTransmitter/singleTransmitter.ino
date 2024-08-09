@@ -8,7 +8,7 @@ void setup() {
   Serial.begin(115200);                   //Set up Serial for debug output
   milesTag.debug(Serial);                 //Send milesTag debug output to Serial (optional)
   milesTag.begin();                       //Simple single transmitter requires no other initialisation
-  milesTag.setTransmitPin(23);            //Set the transmit pin, which is mandatory
+  milesTag.setTransmitPin(12);            //Set the transmit pin, which is mandatory
 }
 
 void loop() {
