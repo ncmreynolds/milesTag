@@ -21,8 +21,8 @@ void setup() {
 }
 
 void loop() {
-  milesTag.transmitDamage(1, 0);              //Transmit one damage from the first transmitter. Transmitter index starts at zero
-  delay(5e3);
-  milesTag.transmitDamage(2, 1);              //Transmit two damage from the second transmitter
-  delay(5e3);
+  milesTag.transmitDamage();                  //Transmit one damage from the first transmitter, which is the default
+  delay(10e3);
+  milesTag.transmitDamage(2, 1);              //Transmit two damage from the second transmitter. Transmitter index starts at zero
+  delay(10e3);
 }
