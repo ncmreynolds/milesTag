@@ -189,12 +189,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			.mem_block_symbols = maximum_number_of_symbols_,
 			.trans_queue_depth = 4,
 		};
-		/*
 		infrared_transmitter_config_[index].flags = {
-			.with_dma = 1,
-			.allow_pd = 1,
+			.with_dma = false,
+			//.allow_pd = 1,
 		};
-		*/
 		if(rmt_new_tx_channel(&infrared_transmitter_config_[index], &infrared_transmitter_handle_[index]) == ESP_OK)
 		{
 			rmt_apply_carrier(infrared_transmitter_handle_[index], &global_transmitter_config_);
@@ -410,20 +408,18 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	}
 	bool milesTagClass::configure_rx_pin_(uint8_t index, int8_t pin, bool inverted)
 	{
-		//if(xTaskCreatePinnedToCore(recvIR, "recvIR", 4096, NULL, 10, NULL, 1) == pdPASS)		//Create the RTOS task
-		if(true)
+		infrared_receiver_config_[index] = {
+			.gpio_num = static_cast<gpio_num_t>(pin),
+			.clk_src = RMT_CLK_SRC_DEFAULT,
+			.resolution_hz = 1000000,
+			.mem_block_symbols = maximum_number_of_symbols_,
+		};
+		infrared_receiver_config_[index].flags = {
+			.invert_in = inverted,
+			.with_dma = false,
+		};
+		if(rmt_new_rx_channel(&infrared_receiver_config_[index], &infrared_receiver_handle_[index]) == ESP_OK)
 		{
-			infrared_receiver_config_[index] = {
-				.gpio_num = static_cast<gpio_num_t>(pin),
-				.clk_src = RMT_CLK_SRC_DEFAULT,
-				.resolution_hz = 1000000,
-				.mem_block_symbols = maximum_number_of_symbols_,
-			};
-			infrared_receiver_config_[index].flags = {
-				.invert_in = inverted,
-				.with_dma = false,
-			};
-			rmt_new_rx_channel(&infrared_receiver_config_[index], &infrared_receiver_handle_[index]);
 			rmt_rx_event_callbacks_t callbacks = {
                 .on_recv_done = rmt_rx_done_callback
             };
