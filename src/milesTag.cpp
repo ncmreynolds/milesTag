@@ -21,17 +21,17 @@ milesTagClass::~milesTagClass()	//Destructor function
 bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitters, uint8_t numberOfReceivers) 
 {
 	type = typeToIntialise;
-	#if defined SUPPORT_RMT_TRANSMIT
+	#if defined SUPPORT_MILESTAG_TRANSMIT
 		number_of_transmitters_ = numberOfTransmitters;
 	#endif
-	#if defined SUPPORT_RMT_RECEIVE
+	#if defined SUPPORT_MILESTAG_RECEIVE
 		number_of_receivers_ = numberOfReceivers;
 	#endif
 	bool initialisation_success_ = true;
-	#if defined SUPPORT_RMT_TRANSMIT && defined SUPPORT_RMT_RECEIVE
+	#if defined SUPPORT_MILESTAG_TRANSMIT && defined SUPPORT_MILESTAG_RECEIVE
 		if(type == deviceType::combo)
 		{
-			#if ESP_IDF_VERSION_MAJOR < 5
+			#if defined SUPPORT_RMT_TRANSMIT && ESP_IDF_VERSION_MAJOR < 5
 				if(number_of_transmitters_ + numberOfReceivers + 1 > RMT_CHANNEL_MAX)
 				{
 					initialisation_success_ = false;
@@ -43,10 +43,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			}
 		}
 	#endif
-	#if defined SUPPORT_RMT_TRANSMIT
+	#if defined SUPPORT_MILESTAG_TRANSMIT
 		if(type == deviceType::transmitter)
 		{
-			#if ESP_IDF_VERSION_MAJOR < 5
+			#if defined SUPPORT_RMT_TRANSMIT && ESP_IDF_VERSION_MAJOR < 5
 				if(number_of_transmitters_ + 1 > RMT_CHANNEL_MAX)
 				{
 					initialisation_success_ = false;
@@ -58,10 +58,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			}
 		}
 	#endif
-	#if defined SUPPORT_RMT_RECEIVE
+	#if defined SUPPORT_MILESTAG_RECEIVE
 		if(type == deviceType::receiver)
 		{
-			#if ESP_IDF_VERSION_MAJOR < 5
+			#if defined SUPPORT_RMT_RECEIVE && ESP_IDF_VERSION_MAJOR < 5
 				if(number_of_receivers_ + 1 > RMT_CHANNEL_MAX)
 				{
 					initialisation_success_ = false;
@@ -84,33 +84,58 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	//Possible workaround for RMT initialisation issue following an unexpected reset, eg. during programming
 	//periph_module_disable(PERIPH_RMT_MODULE);
     //periph_module_enable(PERIPH_RMT_MODULE);
-	#if defined SUPPORT_RMT_TRANSMIT
+	#if defined SUPPORT_MILESTAG_TRANSMIT
 		if(type == deviceType::transmitter || type == deviceType::combo)
 		{
-			infrared_transmitter_ = new rmt_config_t[number_of_transmitters_];
-			tx_buffer_ = new rmt_item32_t*[number_of_transmitters_];
-			for(uint8_t index = 0; index < tx_length_; index++)
-			{
-				tx_buffer_[index] = new rmt_item32_t[tx_length_];
-			}
+			#if defined SUPPORT_RMT_TRANSMIT
+				infrared_transmitter_handle_ = new rmt_channel_handle_t[number_of_transmitters_];
+				infrared_transmitter_config_ = new rmt_tx_channel_config_t[number_of_transmitters_];
+				symbols_to_transmit_ = new rmt_symbol_word_t*[number_of_transmitters_];
+				number_of_symbols_to_transmit_ = new uint8_t[number_of_transmitters_];
+				//encoder = static_cast<milesTagClass::milestag_encoder_t_*>(rmt_alloc_encoder_mem(sizeof(milestag_encoder_t_)));		//Allocate the encoder
+				if(rmt_new_copy_encoder(&copy_encoder_config_, &copy_encoder_) != ESP_OK)	//Initialise the copy encoder
+				{
+					if(debug_uart_ != nullptr)
+					{
+						debug_uart_->println(F("milesTag: failed to create copy encoder"));
+					}
+					initialisation_success_ = false;
+				}
+				else
+				{
+					if(debug_uart_ != nullptr)
+					{
+						debug_uart_->println(F("milesTag: created copy encoder"));
+					}
+				}
+				for(uint8_t index = 0; index < number_of_transmitters_; index++)
+				{
+					symbols_to_transmit_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
+					number_of_symbols_to_transmit_[index] = 0;
+				}
+			#else
+			#endif
 			if(debug_uart_ != nullptr)
 			{
 				debug_uart_->printf_P(PSTR("milesTag: created %u TX channel(s)\r\n"), number_of_transmitters_);
 			}
 		}
 	#endif
-	#if defined SUPPORT_RMT_RECEIVE
+	#if defined SUPPORT_MILESTAG_RECEIVE
 		if(type == deviceType::receiver || type == deviceType::combo)
 		{
-			//Create RMT data structures for the receive channels (usually just one, but the intention is to support multiples)
-			infrared_receiver_config_ = new rmt_rx_channel_config_t[number_of_receivers_];
-			infrared_receiver_handle_ = new rmt_channel_handle_t[number_of_receivers_];
-			rx_event_data_ = new rmt_rx_done_event_data_t[number_of_receivers_];
-			received_symbols_ = new rmt_symbol_word_t*[number_of_receivers_];
-			for(uint8_t index = 0; index < number_of_receivers_; index++)
-			{
-				received_symbols_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
-			}
+			#if defined SUPPORT_RMT_RECEIVE
+				//Create RMT data structures for the receive channels (usually just one, but the intention is to support multiples)
+				infrared_receiver_config_ = new rmt_rx_channel_config_t[number_of_receivers_];	//Create data structures
+				infrared_receiver_handle_ = new rmt_channel_handle_t[number_of_receivers_];
+				rx_event_data_ = new rmt_rx_done_event_data_t[number_of_receivers_];
+				received_symbols_ = new rmt_symbol_word_t*[number_of_receivers_];
+				for(uint8_t index = 0; index < number_of_receivers_; index++)
+				{
+					received_symbols_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
+				}
+			#else
+			#endif
 			if(debug_uart_ != nullptr)
 			{
 				debug_uart_->printf_P(PSTR("milesTag: created %u RX channel(s)\r\n"), number_of_receivers_);
@@ -119,18 +144,22 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	#endif
 	return initialisation_success_;
 }
-#if defined SUPPORT_RMT_TRANSMIT
+#if defined SUPPORT_MILESTAG_TRANSMIT
 	void milesTagClass::setCarrierFrequency(uint16_t frequency)	//Must be done before begin(), default is 56000
 	{
-		carrier_frequency_ = frequency;
+		#if defined SUPPORT_RMT_TRANSMIT
+			global_transmitter_config_.frequency_hz = frequency;
+		#endif
 	}
 	void milesTagClass::setDutyCycle(uint8_t duty, uint8_t transmitterIndex)	//Must be done before begin(), default is 50 and very unlikely to change
 	{
-		carrier_duty_cycle_ = duty;
+		#if defined SUPPORT_RMT_TRANSMIT
+			global_transmitter_config_.duty_cycle = float(duty)/100.0;
+		#endif
 	}
 	bool milesTagClass::setTransmitPin(int8_t pin)	//Set transmit pin for a single transmitter device
 	{
-		if((type == deviceType::transmitter || type == deviceType::combo) && infrared_transmitter_ != nullptr)
+		if((type == deviceType::transmitter || type == deviceType::combo) && infrared_transmitter_handle_ != nullptr)
 		{
 			transmitters_configured_ = configure_tx_pin_(0, pin);
 			return transmitters_configured_;
@@ -139,7 +168,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	}
 	bool milesTagClass::setTransmitPins(int8_t* pins)	//Set transmit pins for a multi-transmitter device
 	{
-		if((type == deviceType::transmitter || type == deviceType::combo) && infrared_transmitter_ != nullptr)
+		if((type == deviceType::transmitter || type == deviceType::combo) && infrared_transmitter_handle_ != nullptr)
 		{
 			uint8_t successfullyConfigured = 0;
 			for(uint8_t index = 0; index < number_of_transmitters_; index++)
@@ -153,25 +182,26 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	}
 	bool milesTagClass::configure_tx_pin_(uint8_t index, int8_t pin)
 	{
-		pinMode(pin,OUTPUT);
-		infrared_transmitter_[index].rmt_mode = RMT_MODE_TX;								//Set as transmitter
-		infrared_transmitter_[index].channel = index_to_channel_(current_free_channel_++);	//Use the current free channel and increment it
-		infrared_transmitter_[index].gpio_num = int8_t_to_gpio_num_t(pin);					//Set the pin
-		infrared_transmitter_[index].mem_block_num = current_free_memory_block_++;			//Use the current free block and increment it
-		infrared_transmitter_[index].tx_config.carrier_freq_hz = carrier_frequency_;		//Set carrier frequency
-		infrared_transmitter_[index].tx_config.carrier_level = RMT_CARRIER_LEVEL_HIGH;		//Set up carrier, it's rarely going to be inverted
-		infrared_transmitter_[index].tx_config.idle_level = RMT_IDLE_LEVEL_LOW;				//Set up carrier, it's rarely going to be inverted
-		infrared_transmitter_[index].tx_config.carrier_duty_percent = carrier_duty_cycle_;	//Dynamically adjustable duty cycle may be a future development
-		infrared_transmitter_[index].tx_config.carrier_en = 1;								//Definitely need a carrier
-		infrared_transmitter_[index].tx_config.loop_en = 0;									//No looping needed, milesTag is normally one-shot
-		infrared_transmitter_[index].tx_config.idle_output_en = 1;							//Enforce output state instead of relying on external pullup/down
-		infrared_transmitter_[index].clk_div = 80;											//80MHz / 80 = 1MHz 0r 1uS per count, used to define the symbols, not related to CPU speed
-		rmt_config(&infrared_transmitter_[index]);											//Load the RMT config
-		if(rmt_driver_install(infrared_transmitter_[index].channel, 0, 0) == ESP_OK)		//Install the RMT driver
+		infrared_transmitter_config_[index] = {
+			.gpio_num = static_cast<gpio_num_t>(pin),
+			.clk_src = RMT_CLK_SRC_DEFAULT,
+			.resolution_hz = 1000000, // 1MHz resolution, 1 tick = 1us
+			.mem_block_symbols = maximum_number_of_symbols_,
+			.trans_queue_depth = 4,
+		};
+		/*
+		infrared_transmitter_config_[index].flags = {
+			.with_dma = 1,
+			.allow_pd = 1,
+		};
+		*/
+		if(rmt_new_tx_channel(&infrared_transmitter_config_[index], &infrared_transmitter_handle_[index]) == ESP_OK)
 		{
+			rmt_apply_carrier(infrared_transmitter_handle_[index], &global_transmitter_config_);
+			rmt_enable(infrared_transmitter_handle_[index]);
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->printf_P(PSTR("milesTag: configured pin %u as TX %u at %.2fKHz %u%% duty cycle\r\n"), pin, index, (float)carrier_frequency_/1000.0, carrier_duty_cycle_);
+				debug_uart_->printf_P(PSTR("milesTag: configured pin %u as transmitter %u at %.2fKHz %u%% duty cycle\r\n"), pin, index, float(global_transmitter_config_.frequency_hz/1000), uint8_t(global_transmitter_config_.duty_cycle*100));
 			}
 			return true;
 		}
@@ -184,78 +214,24 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		}
 		return false;
 	}
-	rmt_channel_t milesTagClass::index_to_channel_(uint8_t index)	//Maps an integer index to an RMT channel
-	{
-		switch(index)
-		{
-			#if ESP_IDF_VERSION_MAJOR > 3
-				#if CONFIG_IDF_TARGET_ESP32
-					case 0:
-						return RMT_CHANNEL_0;
-						break;
-					case 1:
-						return RMT_CHANNEL_1;
-						break;
-					case 2:
-						return RMT_CHANNEL_2;
-						break;
-					case 3:
-						return RMT_CHANNEL_3;
-						break;
-					case 4:
-						return RMT_CHANNEL_4;
-						break;
-					case 5:
-						return RMT_CHANNEL_5;
-						break;
-					case 6:
-						return RMT_CHANNEL_6;
-						break;
-					case 7:
-						return RMT_CHANNEL_7;
-						break;
-				#elif CONFIG_IDF_TARGET_ESP32S2
-					case 0:
-						return RMT_CHANNEL_0;
-						break;
-					case 1:
-						return RMT_CHANNEL_1;
-						break;
-					case 2:
-						return RMT_CHANNEL_2;
-						break;
-					case 3:
-						return RMT_CHANNEL_3;
-						break;
-				#elif CONFIG_IDF_TARGET_ESP32S3
-				#elif CONFIG_IDF_TARGET_ESP32C3
-				#else 
-					#error Target CONFIG_IDF_TARGET is not supported
-				#endif
-			#else // ESP32 Before IDF 4.0
-				#include "rom/rtc.h"
-			#endif
-		}
-		return RMT_CHANNEL_MAX;
-	}
-	void milesTagClass::populate_buffer_with_damage_data_(uint8_t transmitterIndex, uint8_t damage)
+	void milesTagClass::populate_buffer_with_damage_data_(uint8_t index, uint8_t damage)
 	{
 		uint8_t dataToSend[4] = {0,0};
 		dataToSend[0] = player_id_ & B01111111;																		//Player ID is in bottom 7 bits of byte 0, the top bit is always zero for damage
 		dataToSend[1] = ((uint8_t)team_id_) << 6;																	//Team ID is in top two bits of byte 1
 		dataToSend[1] = dataToSend[1] | ((map_damage_to_bitmask_(damage)) << 2);									//Damage is in next four bits of byte 1, others are not sent
 		//Add the milesTag 'start' signal to the RMT buffer
-		tx_buffer_[transmitterIndex][0].duration0 = tx_start_on_time_/2;
-		tx_buffer_[transmitterIndex][0].level0 = 1;
-		tx_buffer_[transmitterIndex][0].duration1 = tx_start_on_time_/2;
-		tx_buffer_[transmitterIndex][0].level1 = 1;
+		symbols_to_transmit_[index][0].duration0 = tx_start_on_time_;
+		symbols_to_transmit_[index][0].level0 = 1;
+		symbols_to_transmit_[index][0].duration1 = tx_off_time_;
+		symbols_to_transmit_[index][0].level1 = 0;
 		//Continue filling the buffer after the 'start' signal
 		uint16_t bitIndex = 1;
 		for(uint8_t bufferByteIndex = 0; bufferByteIndex < 4; bufferByteIndex++)
 		{
 			for(int8_t bufferBitIndex = 7; bufferBitIndex > -1; bufferBitIndex--)
 			{
-				if(bitIndex < tx_length_)
+				if(bitIndex < maximum_number_of_symbols_)
 				{
 					if(debug_uart_ != nullptr)
 					{
@@ -267,10 +243,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 						{
 						  debug_uart_->print(F("1\r\n"));
 						}
-						tx_buffer_[transmitterIndex][bitIndex].duration0 = tx_off_time_;
-						tx_buffer_[transmitterIndex][bitIndex].level0 = 0;
-						tx_buffer_[transmitterIndex][bitIndex].duration1 = tx_one_on_time_;
-						tx_buffer_[transmitterIndex][bitIndex].level1 = 1;
+						symbols_to_transmit_[index][bitIndex].duration0 = tx_one_on_time_;
+						symbols_to_transmit_[index][bitIndex].level0 = 1;
+						symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
+						symbols_to_transmit_[index][bitIndex].level1 = 0;
 					}
 					else
 					{
@@ -278,15 +254,16 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 						{
 						  debug_uart_->print(F("0\r\n"));
 						}
-						tx_buffer_[transmitterIndex][bitIndex].duration0 = tx_off_time_;
-						tx_buffer_[transmitterIndex][bitIndex].level0 = 0;
-						tx_buffer_[transmitterIndex][bitIndex].duration1 = tx_zero_on_time_;
-						tx_buffer_[transmitterIndex][bitIndex].level1 = 1;
+						symbols_to_transmit_[index][bitIndex].duration0 = tx_zero_on_time_;
+						symbols_to_transmit_[index][bitIndex].level0 = 1;
+						symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
+						symbols_to_transmit_[index][bitIndex].level1 = 0;
 					}
 				}
 				bitIndex++;
 			}
 		}
+		number_of_symbols_to_transmit_[index] = bitIndex;
 	}
 	uint8_t milesTagClass::map_damage_to_bitmask_(uint8_t damage)
 	{
@@ -346,18 +323,22 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		}
 		return B00000000;
 	}
-	bool milesTagClass::transmit_stored_buffer_(uint8_t transmitterIndex, rmt_item32_t* buffer, uint8_t bufferLength)	//Transmit a buffer from the specified transmitter channel
+	bool milesTagClass::transmit_stored_buffer_(uint8_t transmitterIndex, rmt_symbol_word_t* buffer, uint8_t bufferLength, bool wait)	//Transmit a buffer from the specified transmitter channel
 	{
 		if(debug_uart_ != nullptr)
 		{
-			debug_uart_->print(F("RMT: Sending durations\r\n"));
+			debug_uart_->print(F("milestag: sending pulses\r\n"));
 			for(uint8_t index = 0; index < bufferLength; index++)
 			{
-				debug_uart_->printf_P(PSTR("RMT: %04u %s/%04u %s\r\n"), buffer[index].duration0, (buffer[index].level0 == 0 ? "off":"on"), buffer[index].duration1, (buffer[index].level1 == 0? "off":"on"));
+				debug_uart_->printf_P(PSTR("milesTag: symbol %02u - %s:%04u/%s:%04u\r\n"), index, (buffer[index].level0 == 0 ? "Off":"On"), buffer[index].duration0, (buffer[index].level1 == 0 ? "Off":"On"), buffer[index].duration1);
 			}
 		}
 		uint32_t sendStart = micros();
-		esp_err_t result = rmt_write_items(infrared_transmitter_[transmitterIndex].channel, buffer, bufferLength, false);	//Transmit asynchronously
+		esp_err_t result = rmt_transmit(infrared_transmitter_handle_[transmitterIndex], copy_encoder_, buffer, bufferLength*sizeof(rmt_symbol_word_t), &event_transmitter_config_);	//Transmit asynchronously. The length is doubled because the 'copy encoder' encodes "half symbols"
+		if(wait == true)
+		{
+			rmt_tx_wait_all_done(infrared_transmitter_handle_[transmitterIndex], 1000);
+		}
 		uint32_t sendEnd = micros();
 		if(result == ESP_OK)
 		{
@@ -385,7 +366,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				debug_uart_->printf_P(PSTR("milesTag: transmitting %u damage on transmitter %u\r\n"), damage, transmitterIndex);
 			}
 			populate_buffer_with_damage_data_(transmitterIndex, damage);
-			return transmit_stored_buffer_(transmitterIndex, tx_buffer_[transmitterIndex], tx_length_);
+			return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex]);
 		}
 		else
 		{
@@ -397,7 +378,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		return false;
 	}
 #endif
-#if defined SUPPORT_RMT_RECEIVE
+#if defined SUPPORT_MILESTAG_RECEIVE
 	bool milesTagClass::setReceivePin(int8_t pin, bool inverted)	//Set receive pin for a single transmitter device
 	{
 		if((type == deviceType::receiver || type == deviceType::combo) && infrared_receiver_config_ != nullptr)
@@ -474,14 +455,15 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				//Parse the data once!
 				for(uint8_t index = 0; index < number_of_receivers_; index++)
 				{
-					if(rx_event_data_[index].num_symbols > 0)
+					//if(rx_event_data_[index].num_symbols > 0)
+					if(len > 0)
 					{
 						if(debug_uart_ != nullptr)
 						{
 							debug_uart_->printf_P(PSTR("milesTag: %u symbols in channel %u\r\n"), uint8_t(len), index);
 							for(uint16_t i=0;i<len;i++)
 							{
-								debug_uart_->printf("Symbol %u - %s:%d,%s:%d\r\n", i,!received_symbols_[index][i].level0 ? "Off":"On", received_symbols_[index][i].duration0,!received_symbols_[index][i].level1 ? "Off":"On", received_symbols_[index][i].duration1);
+								debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u\r\n", i,!received_symbols_[index][i].level0 ? "Off":"On", received_symbols_[index][i].duration0,!received_symbols_[index][i].level1 ? "Off":"On", received_symbols_[index][i].duration1);
 							}
 						}
 					}
@@ -504,7 +486,8 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		for(uint8_t index = 0; index < number_of_receivers_; index++)
 		{
-			if(rx_event_data_[index].num_symbols > 0)
+			//if(rx_event_data_[index].num_symbols > 0)
+			if(len > 0)
 			{
 				if(debug_uart_ != nullptr)
 				{
@@ -573,11 +556,12 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		return 1;
 	}
 #endif
-
+/*
 gpio_num_t milesTagClass::int8_t_to_gpio_num_t(int8_t pin)
 {
 	return (gpio_num_t) pin;
 }
+*/
 void milesTagClass::setPlayerId(uint8_t id)	//Set the player ID, which can be 0-127, default 1
 {
 	player_id_ = id;
