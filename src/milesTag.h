@@ -41,7 +41,9 @@ class milesTagClass	{
 			bool setTransmitPin(int8_t pin);										//Set transmit pin for a single transmitter device
 			bool setTransmitPins(int8_t* pins);										//Set transmit pins for a multi-transmitter device
 			//Transmission
-			bool transmitDamage(uint8_t damage = 1, uint8_t transmitterIndex = 0);	//Send damage on the specified transmitter, defaults to 1 damage on the first transmitter
+			bool transmitDamage(uint8_t damage = 1,									//Send damage on the specified transmitter, defaults to 1 damage on the first transmitter
+				uint8_t transmitterIndex = 0,
+				bool wait = false);
 		#endif
 		#if defined SUPPORT_MILESTAG_RECEIVE
 			bool setReceivePin(int8_t pin, bool inverted = true);					//Set receive pin for a single transmitter device
@@ -140,9 +142,10 @@ class milesTagClass	{
 			rmt_rx_channel_config_t* infrared_receiver_config_ = nullptr;			//The RMT configuration for the receiver(s)
 			rmt_channel_handle_t* infrared_receiver_handle_ = nullptr;				//RMT receiver channels
 			rmt_rx_done_event_data_t* rx_event_data_ = nullptr;						//RMT receiver event data
+			bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
+			#endif
 			bool configure_rx_pin_(uint8_t index, int8_t pin, bool inverted = true);//Configure a pin for RX on the current available channel
 			void resumeReception();													//Resume reception on all channels
-			#endif
 			//Damage
 			uint8_t map_bitmask_to_damage_(uint8_t bitmask);						//Turn a bitmask value into a numeric damage value when unpacking a packet
 		#endif

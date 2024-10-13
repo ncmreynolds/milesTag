@@ -332,8 +332,8 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			}
 		}
 		uint32_t sendStart = micros();
-		esp_err_t result = rmt_transmit(infrared_transmitter_handle_[transmitterIndex], copy_encoder_, buffer, bufferLength*sizeof(rmt_symbol_word_t), &event_transmitter_config_);	//Transmit asynchronously. The length is doubled because the 'copy encoder' encodes "half symbols"
-		if(wait == true)
+		esp_err_t result = rmt_transmit(infrared_transmitter_handle_[transmitterIndex], copy_encoder_, buffer, bufferLength*sizeof(rmt_symbol_word_t), &event_transmitter_config_);	
+		if(wait == true)	//Block until transmitted
 		{
 			rmt_tx_wait_all_done(infrared_transmitter_handle_[transmitterIndex], 1000);
 		}
@@ -355,7 +355,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		}
 		return false;
 	}
-	bool milesTagClass::transmitDamage(uint8_t damage, uint8_t transmitterIndex)	//Send damage on the specified transmitter, defaults to 1 damage on the first
+	bool milesTagClass::transmitDamage(uint8_t damage, uint8_t transmitterIndex, bool wait)	//Send damage on the specified transmitter, defaults to 1 damage on the first
 	{
 		if(transmitters_configured_ == true)
 		{
@@ -364,7 +364,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				debug_uart_->printf_P(PSTR("milesTag: transmitting %u damage on transmitter %u\r\n"), damage, transmitterIndex);
 			}
 			populate_buffer_with_damage_data_(transmitterIndex, damage);
-			return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex]);
+			return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex], wait);
 		}
 		else
 		{
@@ -406,6 +406,15 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		BaseType_t high_task_wakeup = pdFALSE;
 		return high_task_wakeup == pdTRUE;
 	}
+	/*
+	bool milesTagClass::rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
+	{
+		milesTag.ir_data_received_ = true;
+		milesTag.len = edata->num_symbols;
+		BaseType_t high_task_wakeup = pdFALSE;
+		return high_task_wakeup == pdTRUE;
+	}
+	*/
 	bool milesTagClass::configure_rx_pin_(uint8_t index, int8_t pin, bool inverted)
 	{
 		infrared_receiver_config_[index] = {
@@ -422,6 +431,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		{
 			rmt_rx_event_callbacks_t callbacks = {
                 .on_recv_done = rmt_rx_done_callback
+				//.on_recv_done = rx_done_callback_
             };
 			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &callbacks, &rx_event_data_[index]);
 			rmt_enable(infrared_receiver_handle_[index]);
