@@ -128,11 +128,12 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				//Create RMT data structures for the receive channels (usually just one, but the intention is to support multiples)
 				infrared_receiver_config_ = new rmt_rx_channel_config_t[number_of_receivers_];	//Create data structures
 				infrared_receiver_handle_ = new rmt_channel_handle_t[number_of_receivers_];
-				rx_event_data_ = new rmt_rx_done_event_data_t[number_of_receivers_];
+				number_of_received_symbols_ = new uint8_t[number_of_receivers_];
 				received_symbols_ = new rmt_symbol_word_t*[number_of_receivers_];
 				for(uint8_t index = 0; index < number_of_receivers_; index++)
 				{
 					received_symbols_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
+					number_of_received_symbols_[index] = 0;
 				}
 			#else
 			#endif
@@ -402,9 +403,8 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
 	{
 		milesTag.ir_data_received_ = true;
-		milesTag.len = edata->num_symbols;
-		BaseType_t high_task_wakeup = pdFALSE;
-		return high_task_wakeup == pdTRUE;
+		*(uint8_t *)(user_data) = edata->num_symbols;
+		return false;
 	}
 	/*
 	bool milesTagClass::rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
@@ -433,7 +433,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
                 .on_recv_done = rmt_rx_done_callback
 				//.on_recv_done = rx_done_callback_
             };
-			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &callbacks, &rx_event_data_[index]);
+			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &callbacks, &number_of_received_symbols_[index]);
 			rmt_enable(infrared_receiver_handle_[index]);
 			rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
 			if(debug_uart_ != nullptr)
@@ -461,13 +461,12 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				//Parse the data once!
 				for(uint8_t index = 0; index < number_of_receivers_; index++)
 				{
-					//if(rx_event_data_[index].num_symbols > 0)
-					if(len > 0)
+					if(number_of_received_symbols_[index] > 0)
 					{
 						if(debug_uart_ != nullptr)
 						{
-							debug_uart_->printf_P(PSTR("milesTag: %u symbols in channel %u\r\n"), uint8_t(len), index);
-							for(uint16_t i=0;i<len;i++)
+							debug_uart_->printf_P(PSTR("milesTag: %u symbols in channel %u\r\n"), number_of_received_symbols_[index], index);//index);
+							for(uint16_t i=0;i<number_of_received_symbols_[index];i++)
 							{
 								debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u\r\n", i,!received_symbols_[index][i].level0 ? "Off":"On", received_symbols_[index][i].duration0,!received_symbols_[index][i].level1 ? "Off":"On", received_symbols_[index][i].duration1);
 							}
@@ -492,8 +491,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		for(uint8_t index = 0; index < number_of_receivers_; index++)
 		{
-			//if(rx_event_data_[index].num_symbols > 0)
-			if(len > 0)
+			if(number_of_received_symbols_[index] > 0)
 			{
 				if(debug_uart_ != nullptr)
 				{

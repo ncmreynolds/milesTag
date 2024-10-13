@@ -51,7 +51,7 @@ class milesTagClass	{
 			bool dataReceived();
 			//Dumb semaphore
 			volatile bool ir_data_received_ = 0;
-			size_t len = 0;
+			uint8_t* number_of_received_symbols_ = nullptr;
 		#endif
 		bool begin(deviceType typeToIntialise = deviceType::transmitter,
 			uint8_t numberOfTransmitters = 1,
@@ -141,7 +141,6 @@ class milesTagClass	{
 			rmt_symbol_word_t** received_symbols_;									//Symbol buffers
 			rmt_rx_channel_config_t* infrared_receiver_config_ = nullptr;			//The RMT configuration for the receiver(s)
 			rmt_channel_handle_t* infrared_receiver_handle_ = nullptr;				//RMT receiver channels
-			rmt_rx_done_event_data_t* rx_event_data_ = nullptr;						//RMT receiver event data
 			bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
 			#endif
 			bool configure_rx_pin_(uint8_t index, int8_t pin, bool inverted = true);//Configure a pin for RX on the current available channel
