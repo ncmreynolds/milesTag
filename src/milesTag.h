@@ -49,6 +49,9 @@ class milesTagClass	{
 			bool setReceivePin(int8_t pin, bool inverted = true);					//Set receive pin for a single transmitter device
 			bool setReceivePins(int8_t* pins);										//Set receive pins for a multi-receiver device
 			bool dataReceived();													//Check if data has been received
+			uint8_t receivedDamage();												//Amount of damage received, 0 implies a message rather than damage
+			uint8_t receivedPlayerId();												//Received player ID in damage or message
+			uint8_t receivedTeamId();												//Received team ID in damage or message
 			bool resumeReception();													//Resume reception on the first 'busy' channel, false if no channel was busy
 		#endif
 		bool begin(deviceType typeToIntialise = deviceType::transmitter,
@@ -66,7 +69,7 @@ class milesTagClass	{
 	private:
 		//Game data
 		uint8_t player_id_ = 1;													//Can be 0-127
-		uint8_t team_id_ = 0;													//Can be 0-127
+		uint8_t team_id_ = 0;													//Can be 0-3
 		uint8_t current_free_channel_ = 1;
 		uint8_t current_free_memory_block_ = 1;
 		static const uint16_t tx_start_on_time_ = 2400;							//Start on time  ie. how long to send carrier for to indicate a start bit
@@ -136,8 +139,24 @@ class milesTagClass	{
 			rmt_rx_channel_config_t* infrared_receiver_config_ = nullptr;			//The RMT configuration for the receiver(s)
 			rmt_channel_handle_t* infrared_receiver_handle_ = nullptr;				//RMT receiver channels
 			//bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
+			void resume_reception_(uint8_t index);									//Resume reception on a specific channel
 			#endif
 			bool configure_rx_pin_(uint8_t index, int8_t pin, bool inverted = true);//Configure a pin for RX on the current available channel
+			bool parse_received_symbols_(uint8_t index);							//Parse a buffer of pulse timings
+			uint8_t characterise_symbol_(uint8_t index,uint8_t  symbol_index_);		//Parse an individual symbol
+			static const uint8_t maximum_message_length_ = 3;						//Maximum size of a milesTag message
+			static const uint16_t start_bit_low_watermark_ = 2200;
+			static const uint16_t start_bit_high_watermark_ = 2480;
+			static const uint16_t zero_bit_low_watermark_ = 590;
+			static const uint16_t zero_bit_high_watermark_ = 680;
+			static const uint16_t one_bit_low_watermark_ = 1190;
+			static const uint16_t one_bit_high_watermark_ = 1280;
+			static const uint16_t gap_low_watermark_ = 520;
+			static const uint16_t gap_high_watermark_ = 680;
+			uint8_t** message_data_ = nullptr;										//One set of message data per receiver
+			uint8_t received_player_id_ = 0;										//Can be 0-127
+			uint8_t received_team_id_ = 0;											//Can be 0-3
+			uint8_t received_damage_ = 0;											//Can be 1-100 but is derived from a bitmask
 			//Damage
 			uint8_t map_bitmask_to_damage_(uint8_t bitmask);						//Turn a bitmask value into a numeric damage value when unpacking a packet
 		#endif

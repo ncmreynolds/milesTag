@@ -130,10 +130,12 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				infrared_receiver_handle_ = new rmt_channel_handle_t[number_of_receivers_];
 				number_of_received_symbols_ = new uint8_t[number_of_receivers_];
 				received_symbols_ = new rmt_symbol_word_t*[number_of_receivers_];
+				message_data_ = new uint8_t*[number_of_receivers_];
 				for(uint8_t index = 0; index < number_of_receivers_; index++)
 				{
 					received_symbols_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
 					number_of_received_symbols_[index] = 0;
+					message_data_[index] = new uint8_t[maximum_message_length_];
 				}
 			#else
 			#endif
@@ -225,7 +227,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	}
 	void milesTagClass::populate_buffer_with_damage_data_(uint8_t index, uint8_t damage)
 	{
-		uint8_t dataToSend[4] = {0,0};
+		uint8_t dataToSend[2] = {0,0};
 		dataToSend[0] = player_id_ & B01111111;																		//Player ID is in bottom 7 bits of byte 0, the top bit is always zero for damage
 		dataToSend[1] = ((uint8_t)team_id_) << 6;																	//Team ID is in top two bits of byte 1
 		dataToSend[1] = dataToSend[1] | ((map_damage_to_bitmask_(damage)) << 2);									//Damage is in next four bits of byte 1, others are not sent
@@ -235,44 +237,39 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		symbols_to_transmit_[index][0].duration1 = tx_off_time_;
 		symbols_to_transmit_[index][0].level1 = 0;
 		//Continue filling the buffer after the 'start' signal
-		uint16_t bitIndex = 1;
-		for(uint8_t bufferByteIndex = 0; bufferByteIndex < 4; bufferByteIndex++)
+		for(uint8_t bitIndex = 1; bitIndex < 16; bitIndex++)
 		{
-			for(int8_t bufferBitIndex = 7; bufferBitIndex > -1; bufferBitIndex--)
+			if(bitIndex < maximum_number_of_symbols_)
 			{
-				if(bitIndex < maximum_number_of_symbols_)
+				if(debug_uart_ != nullptr)
+				{
+				  debug_uart_->printf_P(PSTR("milesTag: byte:%u Bit:%u - "), (bitIndex - 1)/8, (bitIndex - 1)%8);
+				}
+				if(bitRead(dataToSend[(bitIndex - 1)/8], 7-((bitIndex - 1)%8)))
 				{
 					if(debug_uart_ != nullptr)
 					{
-					  debug_uart_->printf_P(PSTR("milesTag: byte: %u Bit: %u - "), bufferByteIndex, bufferBitIndex);
+					  debug_uart_->print(F("1\r\n"));
 					}
-					if(bitRead(dataToSend[bufferByteIndex], bufferBitIndex))
-					{
-						if(debug_uart_ != nullptr)
-						{
-						  debug_uart_->print(F("1\r\n"));
-						}
-						symbols_to_transmit_[index][bitIndex].duration0 = tx_one_on_time_;
-						symbols_to_transmit_[index][bitIndex].level0 = 1;
-						symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
-						symbols_to_transmit_[index][bitIndex].level1 = 0;
-					}
-					else
-					{
-						if(debug_uart_ != nullptr)
-						{
-						  debug_uart_->print(F("0\r\n"));
-						}
-						symbols_to_transmit_[index][bitIndex].duration0 = tx_zero_on_time_;
-						symbols_to_transmit_[index][bitIndex].level0 = 1;
-						symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
-						symbols_to_transmit_[index][bitIndex].level1 = 0;
-					}
+					symbols_to_transmit_[index][bitIndex].duration0 = tx_one_on_time_;
+					symbols_to_transmit_[index][bitIndex].level0 = 1;
+					symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
+					symbols_to_transmit_[index][bitIndex].level1 = 0;
 				}
-				bitIndex++;
+				else
+				{
+					if(debug_uart_ != nullptr)
+					{
+					  debug_uart_->print(F("0\r\n"));
+					}
+					symbols_to_transmit_[index][bitIndex].duration0 = tx_zero_on_time_;
+					symbols_to_transmit_[index][bitIndex].level0 = 1;
+					symbols_to_transmit_[index][bitIndex].duration1 = tx_off_time_;
+					symbols_to_transmit_[index][bitIndex].level1 = 0;
+				}
 			}
 		}
-		number_of_symbols_to_transmit_[index] = bitIndex;
+		number_of_symbols_to_transmit_[index] = 15;
 	}
 	uint8_t milesTagClass::map_damage_to_bitmask_(uint8_t damage)
 	{
@@ -374,7 +371,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			{
 				if(debug_uart_ != nullptr)
 				{
-					debug_uart_->printf_P(PSTR("milesTag: transmitting %u damage on transmitter %u\r\n"), damage, transmitterIndex);
+					debug_uart_->printf_P(PSTR("milesTag: sending damage:%u player ID:%u team ID:%u transmitter:%u\r\n"), map_bitmask_to_damage_(map_damage_to_bitmask_(damage)), player_id_, team_id_, transmitterIndex);
 				}
 				populate_buffer_with_damage_data_(transmitterIndex, damage);
 				return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex], wait);
@@ -477,18 +474,197 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		{
 			if(number_of_received_symbols_[index] > 0)
 			{
-				if(debug_uart_ != nullptr)
+				if(parse_received_symbols_(index))
 				{
-					debug_uart_->printf_P(PSTR("milesTag: received %u symbols on channel %u\r\n"), number_of_received_symbols_[index], index);//index);
-					for(uint16_t i=0;i<number_of_received_symbols_[index];i++)
-					{
-						debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u\r\n", i,!received_symbols_[index][i].level0 ? "Off":"On", received_symbols_[index][i].duration0,!received_symbols_[index][i].level1 ? "Off":"On", received_symbols_[index][i].duration1);
-					}
+					return true;				//Valid message, inform application
 				}
-				return true;
+				else
+				{
+					resume_reception_(index);	//Invalid message, discard and restart reception
+				}
 			}
 		}
 		return false;
+	}
+	bool milesTagClass::parse_received_symbols_(uint8_t index)
+	{
+		if(debug_uart_ != nullptr)
+		{
+			debug_uart_->printf_P(PSTR("milesTag: received %u symbols on channel %u\r\n"), number_of_received_symbols_[index], index);//index);
+		}
+		bool start_received_ = false;
+		uint8_t start_position_ = 0;
+		uint8_t bit_index_ = 0;
+		for(uint8_t i = 0; i < maximum_message_length_; i++)	//Clear out any old message
+		{
+			message_data_[index][i] = 0;
+		}
+		for(uint16_t symbol_index_=0;symbol_index_<number_of_received_symbols_[index];symbol_index_++)
+		{
+			if(debug_uart_ != nullptr)
+			{
+				debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u", symbol_index_,!received_symbols_[index][symbol_index_].level0 ? "Off":"On", received_symbols_[index][symbol_index_].duration0,!received_symbols_[index][symbol_index_].level1 ? "Off":"On", received_symbols_[index][symbol_index_].duration1);
+			}
+			if(debug_uart_ != nullptr)
+			{
+				debug_uart_->print(F(" - "));
+			}
+			if((symbol_index_- start_position_) < maximum_message_length_ * 8)
+			{
+				uint8_t symbol_character_ = characterise_symbol_(index, symbol_index_);
+				if(start_received_ == true)
+				{
+					if(symbol_character_ == 0 || symbol_character_ == 1)
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->printf_P(PSTR("byte %u bit %u "), bit_index_/8, bit_index_%8);
+						}
+					}
+					if(symbol_character_ == 0)
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->println('0');
+						}
+						bit_index_++;
+					}
+					else if(symbol_character_ == 1)
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->println('1');
+						}
+						message_data_[index][bit_index_/8] += 0x01<<(7-bit_index_%8);	//Simply binary maths to fill up the packet which is MSB
+						bit_index_++;
+					}
+					else
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->println(F("invalid"));
+						}
+						return false;	//After start, only 1 & 0 are valid
+					}
+				}
+				else
+				{
+					if(symbol_character_ == 2)	//Start must be received before beginning to parse bits
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->println(F("start"));
+						}
+						if(start_received_ == false)
+						{
+							start_received_ = true;
+							start_position_ = symbol_index_ + 1;
+						}
+						else
+						{
+							return false;	//Multiple starts are invalid
+						}
+					}
+					else if(symbol_character_ == 255)	//Invalid symbols invalidate the whole packet as there is no checksum
+					{
+						if(debug_uart_ != nullptr)
+						{
+							debug_uart_->println(F("unknown"));
+						}
+						return false;
+					}
+				}
+			}
+			else
+			{
+				if(debug_uart_ != nullptr)
+				{
+					debug_uart_->println(F("skipped"));
+				}
+			}
+		}
+		if(start_received_ == true)
+		{
+			if(debug_uart_ != nullptr)
+			{
+				debug_uart_->print(F("milesTag: message "));
+				for(uint8_t i = 0; i < maximum_message_length_; i++)
+				{
+					debug_uart_->printf_P(PSTR("%02x "), message_data_[index][i]);
+				}
+				debug_uart_->println();
+				debug_uart_->print(F("milesTag: recevied "));
+			}
+			if((message_data_[index][0] & 0x80) == 0x80)
+			{
+				if(debug_uart_ != nullptr)
+				{
+					debug_uart_->println(F("control packet"));
+				}
+			}
+			else
+			{
+				if(number_of_received_symbols_[index] == 15)
+				{
+					received_player_id_ = message_data_[index][0] & 0b01111111;
+					received_team_id_ = (message_data_[index][1] & 0b11000000)>>6;
+					received_damage_ = map_bitmask_to_damage_((message_data_[index][1] & 0b00111100)>>2);
+					if(debug_uart_ != nullptr)
+					{
+						debug_uart_->printf_P(PSTR("damage:%u player ID:%u team ID:%u\r\n"), received_damage_, received_player_id_, received_team_id_);
+					}
+					return true;
+				}
+				else
+				{
+					if(debug_uart_ != nullptr)
+					{
+						debug_uart_->println(F("incorrent number of symbols"));
+					}
+				}
+			}
+		}
+		//message_data_[index]
+		return false;
+	}
+	uint8_t milesTagClass::characterise_symbol_(uint8_t index, uint8_t symbol_index_)
+	{
+		if(received_symbols_[index][symbol_index_].level0 == 1 && received_symbols_[index][symbol_index_].level1 == 0)	//It's low/high
+		{
+			if((received_symbols_[index][symbol_index_].duration1 > gap_low_watermark_ &&	//Probably a zero
+				received_symbols_[index][symbol_index_].duration1 < gap_high_watermark_) ||
+				received_symbols_[index][symbol_index_].duration1 == 0)						//End of the packet
+			{
+				if(received_symbols_[index][symbol_index_].duration0 > zero_bit_low_watermark_ &&	//Probably a zero
+					received_symbols_[index][symbol_index_].duration0 < zero_bit_high_watermark_)
+				{
+					return 0;
+				}
+				else if(received_symbols_[index][symbol_index_].duration0 > one_bit_low_watermark_ &&	//Probably a zero
+					received_symbols_[index][symbol_index_].duration0 < one_bit_high_watermark_)
+				{
+					return 1;
+				}
+				else if(received_symbols_[index][symbol_index_].duration0 > start_bit_low_watermark_ &&	//Probably a zero
+					received_symbols_[index][symbol_index_].duration0 < start_bit_high_watermark_)
+				{
+					return 2;
+				}
+			}
+		}
+		return 255;
+	}
+	uint8_t milesTagClass::receivedDamage()
+	{
+		return received_damage_;
+	}
+	uint8_t milesTagClass::receivedPlayerId()
+	{
+		return received_player_id_;
+	}
+	uint8_t milesTagClass::receivedTeamId()
+	{
+		return received_team_id_;
 	}
 	bool milesTagClass::resumeReception()
 	{
@@ -500,12 +676,17 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				{
 					debug_uart_->printf_P(PSTR("milesTag: resuming reception on channel %u\r\n"), index);
 				}
-				number_of_received_symbols_[index] = 0;
-				rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
+				resume_reception_(index);
+				received_damage_ = 0;
 				return true;
 			}
 		}
 		return false;
+	}
+	void milesTagClass::resume_reception_(uint8_t index)
+	{
+		number_of_received_symbols_[index] = 0;
+		rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
 	}
 	uint8_t milesTagClass::map_bitmask_to_damage_(uint8_t bitmask)
 	{
