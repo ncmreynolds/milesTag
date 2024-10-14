@@ -48,10 +48,8 @@ class milesTagClass	{
 		#if defined SUPPORT_MILESTAG_RECEIVE
 			bool setReceivePin(int8_t pin, bool inverted = true);					//Set receive pin for a single transmitter device
 			bool setReceivePins(int8_t* pins);										//Set receive pins for a multi-receiver device
-			bool dataReceived();
-			//Dumb semaphore
-			volatile bool ir_data_received_ = 0;
-			uint8_t* number_of_received_symbols_ = nullptr;
+			bool dataReceived();													//Check if data has been received
+			bool resumeReception();													//Resume reception on the first 'busy' channel, false if no channel was busy
 		#endif
 		bool begin(deviceType typeToIntialise = deviceType::transmitter,
 			uint8_t numberOfTransmitters = 1,
@@ -127,8 +125,6 @@ class milesTagClass	{
 		#if defined SUPPORT_MILESTAG_RECEIVE
 			//Global settings
 			uint8_t number_of_receivers_ = 0;										//Number of receiver channels, usually 1
-			uint32_t hit_time_ = 1500;												//Time between hits
-			uint32_t hit_timer_ = 0;												//Timer for hits
 			#if defined SUPPORT_RMT_RECEIVE
 			rmt_receive_config_t global_receiver_config_ = {						//Global config across all receivers
 				.signal_range_min_ns = 2e3,											//Actually 600us but 2us is the smallest acceptable value in the SDK
@@ -136,12 +132,12 @@ class milesTagClass	{
 			};
 			//Receiver RMT data
 			rmt_symbol_word_t** received_symbols_;									//Symbol buffers
+			uint8_t* number_of_received_symbols_ = nullptr;							//Count of symbols in the buffer
 			rmt_rx_channel_config_t* infrared_receiver_config_ = nullptr;			//The RMT configuration for the receiver(s)
 			rmt_channel_handle_t* infrared_receiver_handle_ = nullptr;				//RMT receiver channels
-			bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
+			//bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
 			#endif
 			bool configure_rx_pin_(uint8_t index, int8_t pin, bool inverted = true);//Configure a pin for RX on the current available channel
-			void resumeReception();													//Resume reception on all channels
 			//Damage
 			uint8_t map_bitmask_to_damage_(uint8_t bitmask);						//Turn a bitmask value into a numeric damage value when unpacking a packet
 		#endif
