@@ -62,9 +62,6 @@ class milesTagClass	{
 		void setTeamId(uint8_t id);												//Set the player team ID, which can be 0-3, default 0
 		//Debug
 		void debug(Stream &);													//Enable debugging on a stream, eg. Serial, which must already be started
-		//Dumb semaphores
-		volatile uint8_t irTX = 0;
-		volatile uint8_t irRX = 0;
 		//Debug
 		Stream *debug_uart_ = nullptr;											//The stream used for debugging
 	protected:

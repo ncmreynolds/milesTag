@@ -181,6 +181,11 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		}
 		return false;
 	}
+	bool rmt_tx_done_callback(rmt_channel_handle_t channel, const rmt_tx_done_event_data_t *edata, void *user_data)
+	{
+		*(uint8_t *)(user_data) = 0;	//Reset the symbol count, which shows this channel as free
+		return false;
+	}
 	bool milesTagClass::configure_tx_pin_(uint8_t index, int8_t pin)
 	{
 		infrared_transmitter_config_[index] = {
@@ -196,6 +201,11 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		};
 		if(rmt_new_tx_channel(&infrared_transmitter_config_[index], &infrared_transmitter_handle_[index]) == ESP_OK)
 		{
+			rmt_tx_event_callbacks_t transmit_callbacks_ = {
+                .on_trans_done = rmt_tx_done_callback
+				//.on_recv_done = tx_done_callback_
+            };
+			rmt_tx_register_event_callbacks(infrared_transmitter_handle_[index], &transmit_callbacks_, &number_of_symbols_to_transmit_[index]);
 			rmt_apply_carrier(infrared_transmitter_handle_[index], &global_transmitter_config_);
 			rmt_enable(infrared_transmitter_handle_[index]);
 			if(debug_uart_ != nullptr)
@@ -234,7 +244,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				{
 					if(debug_uart_ != nullptr)
 					{
-					  debug_uart_->printf_P(PSTR("milestag: byte: %u Bit: %u - "), bufferByteIndex, bufferBitIndex);
+					  debug_uart_->printf_P(PSTR("milesTag: byte: %u Bit: %u - "), bufferByteIndex, bufferBitIndex);
 					}
 					if(bitRead(dataToSend[bufferByteIndex], bufferBitIndex))
 					{
@@ -326,7 +336,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		if(debug_uart_ != nullptr)
 		{
-			debug_uart_->print(F("milestag: sending pulses\r\n"));
+			debug_uart_->print(F("milesTag: sending pulses\r\n"));
 			for(uint8_t index = 0; index < bufferLength; index++)
 			{
 				debug_uart_->printf_P(PSTR("milesTag: symbol %02u - %s:%04u/%s:%04u\r\n"), index, (buffer[index].level0 == 0 ? "Off":"On"), buffer[index].duration0, (buffer[index].level1 == 0 ? "Off":"On"), buffer[index].duration1);
@@ -343,7 +353,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		{
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->printf_P(PSTR("RMT: queued data in %u microseconds from transmitter %u\r\n"), sendEnd - sendStart, transmitterIndex);
+				debug_uart_->printf_P(PSTR("milesTag: queued data for transmitter %u in %u microseconds \r\n"), transmitterIndex, sendEnd - sendStart);
 			}
 			return true;
 		}
@@ -360,12 +370,22 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		if(transmitters_configured_ == true)
 		{
-			if(debug_uart_ != nullptr)
+			if(number_of_symbols_to_transmit_[transmitterIndex] == 0)
 			{
-				debug_uart_->printf_P(PSTR("milesTag: transmitting %u damage on transmitter %u\r\n"), damage, transmitterIndex);
+				if(debug_uart_ != nullptr)
+				{
+					debug_uart_->printf_P(PSTR("milesTag: transmitting %u damage on transmitter %u\r\n"), damage, transmitterIndex);
+				}
+				populate_buffer_with_damage_data_(transmitterIndex, damage);
+				return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex], wait);
 			}
-			populate_buffer_with_damage_data_(transmitterIndex, damage);
-			return transmit_stored_buffer_(transmitterIndex, symbols_to_transmit_[transmitterIndex], number_of_symbols_to_transmit_[transmitterIndex], wait);
+			else
+			{
+				if(debug_uart_ != nullptr)
+				{
+					debug_uart_->printf_P(PSTR("milesTag: transmitter %u busy\r\n"), transmitterIndex);
+				}
+			}
 		}
 		else
 		{
@@ -429,11 +449,11 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		};
 		if(rmt_new_rx_channel(&infrared_receiver_config_[index], &infrared_receiver_handle_[index]) == ESP_OK)
 		{
-			rmt_rx_event_callbacks_t callbacks = {
+			rmt_rx_event_callbacks_t receive_callbacks_ = {
                 .on_recv_done = rmt_rx_done_callback
 				//.on_recv_done = rx_done_callback_
             };
-			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &callbacks, &number_of_received_symbols_[index]);
+			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &receive_callbacks_, &number_of_received_symbols_[index]);
 			rmt_enable(infrared_receiver_handle_[index]);
 			rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
 			if(debug_uart_ != nullptr)
