@@ -12,7 +12,7 @@ void setup() {
 }
 
 void loop() {
-  if(milesTag.dataReceived())             //There is something in the packet buffer of the first 'busy' receiver. Multiple recievers can be busy and are handled individually.
+  if(milesTag.dataReceived())             //There is something in the packet buffer of the first 'busy' receiver. Multiple receivers can be busy and are handled individually.
   {
     Serial.println(F("Data"));
     milesTag.resumeReception();           //Clear the first 'busy' receiver buffer and prepare it for another packet. It is not automatically cleared
