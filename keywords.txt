@@ -1,15 +1,33 @@
-milesTag KEYWORD1
+milesTag	KEYWORD1
+milesTagClass	KEYWORD1
 
 //Setup
 
 begin	KEYWORD2
+transmitter	LITERAL1
+receiver	LITERAL1
+combo	LITERAL1
+
+//Transmitter
 setCarrierFrequency	KEYWORD2
 setDutyCycle	KEYWORD2
 setTransmitPin	KEYWORD2
 setTransmitPins	KEYWORD2
+transmitDamage	KEYWORD2
+
+//Receiver
 setReceivePin	KEYWORD2
 setReceivePins	KEYWORD2
-transmitDamage	KEYWORD2
+dataReceived	KEYWORD2
+receivedDamage	KEYWORD2
+receivedTeamId	KEYWORD2
+resumeReception	KEYWORD2
+
+//General
 setPlayerId	KEYWORD2
 setTeamId	KEYWORD2
+playerId	KEYWORD2
+teamId	KEYWORD2
+
+//Debug
 debug	KEYWORD2
