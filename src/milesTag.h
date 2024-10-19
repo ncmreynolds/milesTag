@@ -61,6 +61,8 @@ class milesTagClass	{
 		//Game information
 		void setPlayerId(uint8_t id);											//Set the player ID, which can be 0-127, default 1
 		void setTeamId(uint8_t id);												//Set the player team ID, which can be 0-3, default 0
+		uint8_t playerId();														//Get the player ID, which can be 0-127, default 1
+		uint8_t teamId();														//Get the player team ID, which can be 0-3, default 0
 		//Debug
 		void debug(Stream &);													//Enable debugging on a stream, eg. Serial, which must already be started
 		//Debug
@@ -80,7 +82,7 @@ class milesTagClass	{
 		bool transmitters_configured_ = false;
 		bool receivers_configured_ = false;
 		#if defined SUPPORT_MILESTAG_TRANSMIT || defined SUPPORT_MILESTAG_RECEIVE
-			uint8_t maximum_number_of_symbols_ = 192;								//Absolute maximum number of symbols
+			uint8_t maximum_number_of_symbols_ = 64;								//Absolute maximum number of symbols
 		#endif
 		#if defined SUPPORT_MILESTAG_TRANSMIT
 			//Global settings

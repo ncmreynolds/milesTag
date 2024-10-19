@@ -761,6 +761,14 @@ void milesTagClass::setTeamId(uint8_t id)	//Set the player team ID, which can be
 {
 	team_id_ = id;
 }
+uint8_t milesTagClass::playerId()	//Get the player ID, which can be 0-127, default 1
+{
+	return player_id_;
+}
+uint8_t milesTagClass::teamId()	//Get the player team ID, which can be 0-3, default 0
+{
+	return team_id_;
+}
 void milesTagClass::debug(Stream &terminalStream)
 {
 	debug_uart_ = &terminalStream;		//Set the stream used for the terminal
