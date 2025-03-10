@@ -1,4 +1,16 @@
 #ifndef esp32rmtHelpers_cpp
+/*
+ *	An Arduino library to provide 'helpers' for the RMT peripheral on ESP32 when sending remote-control style infrared signals
+ *
+ *	Mostly it is used in the following libraries that are for making Laser-Tag equipment
+ *
+ *	https://github.com/ncmreynolds/milesTag
+ *	https://github.com/ncmreynolds/WoW
+ *	https://github.com/ncmreynolds/DoT (closed source)
+ *
+ *	Released under LGPL-2.1 see https://github.com/ncmreynolds/esp32rmtHelpers/LICENSE for full license
+ *
+ */
 #include <esp32rmtHelpers.h>
 esp32rmtTransmitHelper::esp32rmtTransmitHelper()	//Constructor function
 {
