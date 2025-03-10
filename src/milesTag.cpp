@@ -184,7 +184,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		dataToSend[1] = ((uint8_t)team_id_) << 6;												//Team ID is in top two bits of byte 1
 		dataToSend[1] = dataToSend[1] | ((map_damage_to_bitmask_(damage)) << 2);				//Damage is in next four bits of byte 1, others are not sent
 		//Add the milesTag 'start' signal to the RMT buffer
-		debug_uart_->println(F("milesTag: Add start marker to buffer"));
+		if(debug_uart_ != nullptr)
+		{
+			debug_uart_->println(F("milesTag: Add start marker to buffer"));
+		}
 		if(transmitHelper->addSymbol(index, tx_start_on_time_, 1, tx_off_time_, 0))
 		{
 			//Continue filling the buffer after the 'start' signal
