@@ -39,7 +39,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			#endif
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->print(F("milesTag: creating combo device\r\n"));
+				debug_uart_->printf_P(PSTR("milesTag: creating combo %u transmitter %u receiver device\r\n"), number_of_transmitters_, number_of_receivers_);
 			}
 		}
 	#endif
@@ -54,7 +54,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			#endif
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->print(F("milesTag: creating transmitter device\r\n"));
+				debug_uart_->printf_P(PSTR("milesTag: creating %u transmitter device(s)\r\n"), number_of_transmitters_);
 			}
 		}
 	#endif
@@ -104,38 +104,50 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				{
 					number_of_successfully_configured_transmitters_ = number_of_transmitters_;
 				}
-			#else
 			#endif
 			if(debug_uart_ != nullptr)
 			{
 				debug_uart_->printf_P(PSTR("milesTag: created %u TX channel(s)\r\n"), number_of_successfully_configured_transmitters_);
 			}
+			if(transmitHelper->maximumNumberOfSymbols() != maximum_number_of_transmit_symbols_)
+			{
+				maximum_number_of_transmit_symbols_ = transmitHelper->maximumNumberOfSymbols();	//Update the symbol cap from whatever the library is configured with
+			}
 		}
-		maximum_number_of_symbols_ = transmitHelper->maximumNumberOfSymbols();	//Update the symbol cap from whatever the library is configured with
 	#endif
 	#if defined SUPPORT_MILESTAG_RECEIVE
 		if(type == deviceType::receiver || type == deviceType::combo)
 		{
 			#if defined ESP32
-				/*
-				//Create RMT data structures for the receive channels (usually just one, but the intention is to support multiples)
-				infrared_receiver_config_ = new rmt_rx_channel_config_t[number_of_receivers_];	//Create data structures
-				infrared_receiver_handle_ = new rmt_channel_handle_t[number_of_receivers_];
-				number_of_received_symbols_ = new uint8_t[number_of_receivers_];
-				received_symbols_ = new rmt_symbol_word_t*[number_of_receivers_];
-				message_data_ = new uint8_t*[number_of_receivers_];
-				for(uint8_t index = 0; index < number_of_receivers_; index++)
+				if(receiveHelper == nullptr)	//It is possible to use an existing transmit helper
 				{
-					received_symbols_[index] = new rmt_symbol_word_t[maximum_number_of_symbols_];
-					number_of_received_symbols_[index] = 0;
-					message_data_[index] = new uint8_t[maximum_message_length_];
+					receiveHelper = new esp32rmtReceiveHelper;
 				}
-				*/
-			#else
+				if(debug_uart_ != nullptr)
+				{
+					receiveHelper->debug(*debug_uart_);
+				}
+				if(receiveHelper->begin(number_of_receivers_) == false)
+				{
+					initialisation_success_ = false;
+				}
+				else
+				{
+					number_of_successfully_configured_receivers_ = number_of_receivers_;
+				}
 			#endif
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->printf_P(PSTR("milesTag: created %u RX channel(s)\r\n"), number_of_receivers_);
+				debug_uart_->printf_P(PSTR("milesTag: created %u RX channel(s)\r\n"), number_of_successfully_configured_receivers_);
+			}
+			message_data_ = new uint8_t*[number_of_receivers_];	//Create buffers for the message data
+			for(uint8_t index = 0; index < number_of_receivers_; index++)
+			{
+				message_data_[index] = new uint8_t[maximum_message_length_];
+			}
+			if(receiveHelper->maximumNumberOfSymbols() != maximum_number_of_receive_symbols_)
+			{
+				maximum_number_of_receive_symbols_ = receiveHelper->maximumNumberOfSymbols();	//Update the symbol cap from whatever the library is configured with
 			}
 		}
 	#endif
@@ -178,7 +190,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			//Continue filling the buffer after the 'start' signal
 			for(uint8_t bitIndex = 1; bitIndex < 16; bitIndex++)
 			{
-				if(bitIndex < maximum_number_of_symbols_)
+				if(bitIndex < maximum_number_of_transmit_symbols_)
 				{
 					if(debug_uart_ != nullptr)
 					{
@@ -330,7 +342,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		if((type == deviceType::receiver || type == deviceType::combo) && number_of_successfully_configured_receivers_ == 1)
 		{
-			return configure_rx_pin_(0, pin, inverted);
+			return receiveHelper->configure_rx_pin_(0, pin, inverted);
 		}
 		return false;
 	}
@@ -341,69 +353,26 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			uint8_t successfullyConfigured = 0;
 			for(uint8_t index = 0; index < number_of_receivers_; index++)
 			{
-				successfullyConfigured += (configure_rx_pin_(index, pins[index]) == true);
+				successfullyConfigured += (receiveHelper->configure_rx_pin_(index, pins[index]) == true);
 			}
 			receivers_configured_ = (successfullyConfigured == number_of_receivers_);
 			return receivers_configured_;
 		}
 		return false;
 	}
-	/*
-	bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
-	{
-		//milesTag.ir_data_received_ = true;
-		*(uint8_t *)(user_data) = edata->num_symbols;
-		return false;
-	}
-	bool milesTagClass::configure_rx_pin_(uint8_t index, int8_t pin, bool inverted)
-	{
-		infrared_receiver_config_[index] = {
-			.gpio_num = static_cast<gpio_num_t>(pin),
-			.clk_src = RMT_CLK_SRC_DEFAULT,
-			.resolution_hz = 1000000,
-			.mem_block_symbols = maximum_number_of_symbols_,
-		};
-		infrared_receiver_config_[index].flags = {
-			.invert_in = inverted,
-			.with_dma = false,
-		};
-		if(rmt_new_rx_channel(&infrared_receiver_config_[index], &infrared_receiver_handle_[index]) == ESP_OK)
-		{
-			rmt_rx_event_callbacks_t receive_callbacks_ = {
-                .on_recv_done = rmt_rx_done_callback
-				//.on_recv_done = rx_done_callback_
-            };
-			rmt_rx_register_event_callbacks(infrared_receiver_handle_[index], &receive_callbacks_, &number_of_received_symbols_[index]);
-			rmt_enable(infrared_receiver_handle_[index]);
-			rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
-			if(debug_uart_ != nullptr)
-			{
-				debug_uart_->printf_P(PSTR("milesTag: configured pin %u for RX\r\n"), pin);
-			}
-			return true;
-		}
-		else
-		{
-			if(debug_uart_ != nullptr)
-			{
-				debug_uart_->printf_P(PSTR("milesTag: failed to configure pin %u for RX\r\n"), pin);
-			}
-		}
-		return false;
-	}
 	bool milesTagClass::dataReceived()
 	{
-		for(uint8_t index = 0; index < number_of_receivers_; index++)
+		for(uint8_t index = 0; index < number_of_successfully_configured_receivers_; index++)
 		{
-			if(number_of_received_symbols_[index] > 0)
+			if(receiveHelper->numberOfReceivedSymbols(index) > 0)
 			{
 				if(parse_received_symbols_(index))
 				{
-					return true;				//Valid message, inform application
+					return true;								//Valid message, inform application
 				}
 				else
 				{
-					resume_reception_(index);	//Invalid message, discard and restart reception
+					receiveHelper->resume_reception_(index);	//Invalid message, discard and restart reception
 				}
 			}
 		}
@@ -411,9 +380,10 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	}
 	bool milesTagClass::parse_received_symbols_(uint8_t index)
 	{
+		uint16_t numberOfReceivedSymbols = receiveHelper->numberOfReceivedSymbols(index);
 		if(debug_uart_ != nullptr)
 		{
-			debug_uart_->printf_P(PSTR("milesTag: received %u symbols on channel %u\r\n"), number_of_received_symbols_[index], index);//index);
+			debug_uart_->printf_P(PSTR("milesTag: received %u symbols on channel %u\r\n"), numberOfReceivedSymbols, index);//index);
 		}
 		bool start_received_ = false;
 		uint8_t start_position_ = 0;
@@ -422,11 +392,11 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		{
 			message_data_[index][i] = 0;
 		}
-		for(uint16_t symbol_index_=0;symbol_index_<number_of_received_symbols_[index];symbol_index_++)
+		for(uint16_t symbol_index_ = 0; symbol_index_ < numberOfReceivedSymbols; symbol_index_++)
 		{
 			if(debug_uart_ != nullptr)
 			{
-				debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u", symbol_index_,!received_symbols_[index][symbol_index_].level0 ? "Off":"On", received_symbols_[index][symbol_index_].duration0,!received_symbols_[index][symbol_index_].level1 ? "Off":"On", received_symbols_[index][symbol_index_].duration1);
+				debug_uart_->printf("milesTag: symbol %02u - %s:%04u/%s:%04u", symbol_index_,!receiveHelper->receivedSymbolLevel0(index, symbol_index_) ? "Off":"On", receiveHelper->receivedSymbolDuration0(index, symbol_index_),!receiveHelper->receivedSymbolLevel1(index, symbol_index_) ? "Off":"On", receiveHelper->receivedSymbolDuration1(index, symbol_index_));
 			}
 			if(debug_uart_ != nullptr)
 			{
@@ -516,7 +486,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 					debug_uart_->printf_P(PSTR("%02x "), message_data_[index][i]);
 				}
 				debug_uart_->println();
-				debug_uart_->print(F("milesTag: recevied "));
+				debug_uart_->print(F("milesTag: received "));
 			}
 			if((message_data_[index][0] & 0x80) == 0x80)
 			{
@@ -527,7 +497,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			}
 			else
 			{
-				if(number_of_received_symbols_[index] == 15)
+				if(numberOfReceivedSymbols == 16)
 				{
 					received_player_id_ = message_data_[index][0] & 0b01111111;
 					received_team_id_ = (message_data_[index][1] & 0b11000000)>>6;
@@ -547,29 +517,28 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				}
 			}
 		}
-		//message_data_[index]
 		return false;
 	}
 	uint8_t milesTagClass::characterise_symbol_(uint8_t index, uint8_t symbol_index_)
 	{
-		if(received_symbols_[index][symbol_index_].level0 == 1 && received_symbols_[index][symbol_index_].level1 == 0)	//It's low/high
+		if(receiveHelper->receivedSymbolLevel0(index, symbol_index_) == 1 && receiveHelper->receivedSymbolLevel1(index, symbol_index_) == 0)	//It's low/high
 		{
-			if((received_symbols_[index][symbol_index_].duration1 > gap_low_watermark_ &&	//Probably a zero
-				received_symbols_[index][symbol_index_].duration1 < gap_high_watermark_) ||
-				received_symbols_[index][symbol_index_].duration1 == 0)						//End of the packet
+			if((receiveHelper->receivedSymbolDuration1(index, symbol_index_) > gap_low_watermark_ &&	//Gap is within range
+				receiveHelper->receivedSymbolDuration1(index, symbol_index_) < gap_high_watermark_) ||
+				receiveHelper->receivedSymbolDuration1(index, symbol_index_) == 0)						//End of the packet
 			{
-				if(received_symbols_[index][symbol_index_].duration0 > zero_bit_low_watermark_ &&	//Probably a zero
-					received_symbols_[index][symbol_index_].duration0 < zero_bit_high_watermark_)
+				if(receiveHelper->receivedSymbolDuration0(index, symbol_index_) > zero_bit_low_watermark_ &&	//Probably a zero
+					receiveHelper->receivedSymbolDuration0(index, symbol_index_) < zero_bit_high_watermark_)
 				{
 					return 0;
 				}
-				else if(received_symbols_[index][symbol_index_].duration0 > one_bit_low_watermark_ &&	//Probably a zero
-					received_symbols_[index][symbol_index_].duration0 < one_bit_high_watermark_)
+				else if(receiveHelper->receivedSymbolDuration0(index, symbol_index_) > one_bit_low_watermark_ &&	//Probably a one
+					receiveHelper->receivedSymbolDuration0(index, symbol_index_) < one_bit_high_watermark_)
 				{
 					return 1;
 				}
-				else if(received_symbols_[index][symbol_index_].duration0 > start_bit_low_watermark_ &&	//Probably a zero
-					received_symbols_[index][symbol_index_].duration0 < start_bit_high_watermark_)
+				else if(receiveHelper->receivedSymbolDuration0(index, symbol_index_) > start_bit_low_watermark_ &&	//Probably a start
+					receiveHelper->receivedSymbolDuration0(index, symbol_index_) < start_bit_high_watermark_)
 				{
 					return 2;
 				}
@@ -577,7 +546,6 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 		}
 		return 255;
 	}
-	*/
 	uint8_t milesTagClass::receivedDamage()
 	{
 		return received_damage_;
@@ -594,28 +562,19 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		for(uint8_t index = 0; index < number_of_receivers_; index++)
 		{
-			/*
-			if(number_of_received_symbols_[index] > 0)
+			if(receiveHelper->numberOfReceivedSymbols(index) > 0)
 			{
 				if(debug_uart_ != nullptr)
 				{
 					debug_uart_->printf_P(PSTR("milesTag: resuming reception on channel %u\r\n"), index);
 				}
-				resume_reception_(index);
+				receiveHelper->resume_reception_(index);
 				received_damage_ = 0;
 				return true;
 			}
-			*/
 		}
 		return false;
 	}
-	/*
-	void milesTagClass::resume_reception_(uint8_t index)
-	{
-		number_of_received_symbols_[index] = 0;
-		rmt_receive(infrared_receiver_handle_[index], received_symbols_[index], maximum_number_of_symbols_*sizeof(rmt_symbol_word_t), &global_receiver_config_);
-	}
-	*/
 	uint8_t milesTagClass::map_bitmask_to_damage_(uint8_t bitmask)
 	{
 		switch(bitmask)

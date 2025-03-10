@@ -6,7 +6,7 @@
 
 void setup() {
   Serial.begin(115200);                   //Set up Serial for debug output
-  //milesTag.debug(Serial);                 //Send milesTag debug output to Serial (optional)
+  milesTag.debug(Serial);                 //Send milesTag debug output to Serial (optional)
   milesTag.begin(milesTag.receiver);      //Simple single receiver requires basic initialisation
   milesTag.setReceivePin(34);             //Set the receive pin, which is mandatory
 }

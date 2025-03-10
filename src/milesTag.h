@@ -67,46 +67,36 @@ class milesTagClass	{
 		//Game data
 		uint8_t player_id_ = 1;													//Can be 0-127
 		uint8_t team_id_ = 0;													//Can be 0-3
-		//IR encoding
-		static const uint16_t tx_start_on_time_ = 2400;							//Start on time  ie. how long to send carrier for to indicate a start bit
-		static const uint16_t tx_zero_on_time_ = 600;							//Zero on time ie. how long to send carrier for to indicate a zero bit
-		static const uint16_t tx_one_on_time_ = 1200;							//One on time ie. how long to send carrier for to indicate a one bit
-		static const uint16_t tx_off_time_ = 600;								//Off time ie. how long to leave between bits
-		#if defined SUPPORT_MILESTAG_TRANSMIT || defined SUPPORT_MILESTAG_RECEIVE
-			uint8_t maximum_number_of_symbols_ = 48;							//Absolute maximum number of symbols
-		#endif
 		#if defined SUPPORT_MILESTAG_TRANSMIT
 			//Global settings
 			esp32rmtTransmitHelper* transmitHelper = nullptr;						//Instance of transmit helper, only initialised if set up to transmit
+			uint8_t maximum_number_of_transmit_symbols_ = 48;						//Absolute maximum number of symbols
 			uint8_t number_of_transmitters_ = 0;									//Number of transmitter channels, usually 1-2
 			uint8_t number_of_successfully_configured_transmitters_ = 0;			//How many transmitters were succesfully configured
+			//Protocol timing
+			static const uint16_t tx_start_on_time_ = 2400;							//Start on time  ie. how long to send carrier for to indicate a start bit
+			static const uint16_t tx_zero_on_time_ = 600;							//Zero on time ie. how long to send carrier for to indicate a zero bit
+			static const uint16_t tx_one_on_time_ = 1200;							//One on time ie. how long to send carrier for to indicate a one bit
+			static const uint16_t tx_off_time_ = 600;								//Off time ie. how long to leave between bits
+			//Encoding packets
 			bool populate_buffer_with_damage_data_(uint8_t transmitterIndex,		//Build a simple 'damage' packet for transmission, this includes the preamble
 				uint8_t damage);
 			uint8_t map_damage_to_bitmask_(uint8_t damage);							//Turn a numeric damage value into a bitmask for packing into a packet
 		#endif
 		#if defined SUPPORT_MILESTAG_RECEIVE
 			//Global settings
+			esp32rmtReceiveHelper* receiveHelper = nullptr;							//Instance of receive helper, only initialised if set up to receive
+			uint8_t maximum_number_of_receive_symbols_ = 64;						//Absolute maximum number of symbols
 			uint8_t number_of_receivers_ = 0;										//Number of receiver channels, usually 1
 			uint8_t number_of_successfully_configured_receivers_ = 0;				//How many receivers were succesfully configured
-			#if defined SUPPORT_RMT_RECEIVE
-			/*
-			rmt_receive_config_t global_receiver_config_ = {						//Global config across all receivers
-				.signal_range_min_ns = 2e3,											//Actually 600us but 2us is the smallest acceptable value in the SDK
-				.signal_range_max_ns = 2800e3,										//Actually 2400us but allow some margin
-			};
-			//Receiver RMT data
-			rmt_symbol_word_t** received_symbols_;									//Symbol buffers
-			uint8_t* number_of_received_symbols_ = nullptr;							//Count of symbols in the buffer
-			rmt_rx_channel_config_t* infrared_receiver_config_ = nullptr;			//The RMT configuration for the receiver(s)
-			rmt_channel_handle_t* infrared_receiver_handle_ = nullptr;				//RMT receiver channels
-			//bool rx_done_callback_(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data);
-			void resume_reception_(uint8_t index);									//Resume reception on a specific channel
-			*/
-			#endif
-			bool configure_rx_pin_(uint8_t index, int8_t pin, bool inverted = true);//Configure a pin for RX on the current available channel
-			bool parse_received_symbols_(uint8_t index);							//Parse a buffer of pulse timings
-			uint8_t characterise_symbol_(uint8_t index,uint8_t  symbol_index_);		//Parse an individual symbol
+			//Parsed hit detail
+			uint8_t received_player_id_ = 0;										//Can be 0-127
+			uint8_t received_team_id_ = 0;											//Can be 0-3
+			uint8_t received_damage_ = 0;											//Can be 1-100 but is derived from a bitmask
+			//Buffer for incoming message
 			static const uint8_t maximum_message_length_ = 3;						//Maximum size of a milesTag message
+			uint8_t** message_data_ = nullptr;										//One set of message data per receiver
+			//Protocol timing
 			static const uint16_t start_bit_low_watermark_ = 2200;
 			static const uint16_t start_bit_high_watermark_ = 2480;
 			static const uint16_t zero_bit_low_watermark_ = 590;
@@ -115,16 +105,11 @@ class milesTagClass	{
 			static const uint16_t one_bit_high_watermark_ = 1280;
 			static const uint16_t gap_low_watermark_ = 520;
 			static const uint16_t gap_high_watermark_ = 680;
-			uint8_t** message_data_ = nullptr;										//One set of message data per receiver
-			uint8_t received_player_id_ = 0;										//Can be 0-127
-			uint8_t received_team_id_ = 0;											//Can be 0-3
-			uint8_t received_damage_ = 0;											//Can be 1-100 but is derived from a bitmask
-			//Damage
+			//Parsing packets
+			bool parse_received_symbols_(uint8_t index);							//Parse a buffer of pulse timings
+			uint8_t characterise_symbol_(uint8_t index,uint8_t  symbol_index_);		//Parse an individual symbol
 			uint8_t map_bitmask_to_damage_(uint8_t bitmask);						//Turn a bitmask value into a numeric damage value when unpacking a packet
 		#endif
-		//Utilities
-		//rmt_channel_t index_to_channel_(uint8_t index);							//Maps an integer index to an RMT channel
-		//gpio_num_t int8_t_to_gpio_num_t(int8_t pin);							//Maps an integet pin to a gpio_num_t
 };
 extern milesTagClass milesTag;	//Create an instance of the class, as only one is practically usable at a time
 #endif
