@@ -158,7 +158,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		if((type == deviceType::transmitter || type == deviceType::combo) && number_of_successfully_configured_transmitters_ == 1)
 		{
-			transmitters_configured_ = transmitHelper->configure_tx_pin_(0, pin);
+			transmitters_configured_ = transmitHelper->configureTxPin(0, pin);
 			return transmitters_configured_;
 		}
 		return false;
@@ -170,7 +170,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			uint8_t successfullyConfigured = 0;
 			for(uint8_t index = 0; index < number_of_transmitters_; index++)
 			{
-				successfullyConfigured += (transmitHelper->configure_tx_pin_(index, pins[index]) == true);
+				successfullyConfigured += (transmitHelper->configureTxPin(index, pins[index]) == true);
 			}
 			transmitters_configured_ = (successfullyConfigured == number_of_transmitters_);
 			return transmitters_configured_;
@@ -309,7 +309,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				}
 				if(populate_buffer_with_damage_data_(transmitterIndex, damage))
 				{
-					return transmitHelper->transmit_stored_buffer_(transmitterIndex, wait);
+					return transmitHelper->transmitSymbols(transmitterIndex, wait);
 				}
 				else
 				{
@@ -342,7 +342,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 	{
 		if((type == deviceType::receiver || type == deviceType::combo) && number_of_successfully_configured_receivers_ == 1)
 		{
-			return receiveHelper->configure_rx_pin_(0, pin, inverted);
+			return receiveHelper->configureRxPin(0, pin, inverted);
 		}
 		return false;
 	}
@@ -353,7 +353,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 			uint8_t successfullyConfigured = 0;
 			for(uint8_t index = 0; index < number_of_receivers_; index++)
 			{
-				successfullyConfigured += (receiveHelper->configure_rx_pin_(index, pins[index]) == true);
+				successfullyConfigured += (receiveHelper->configureRxPin(index, pins[index]) == true);
 			}
 			receivers_configured_ = (successfullyConfigured == number_of_receivers_);
 			return receivers_configured_;
@@ -372,7 +372,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				}
 				else
 				{
-					receiveHelper->resume_reception_(index);	//Invalid message, discard and restart reception
+					receiveHelper->resume(index);	//Invalid message, discard and restart reception
 				}
 			}
 		}
@@ -568,7 +568,7 @@ bool milesTagClass::begin(deviceType typeToIntialise, uint8_t numberOfTransmitte
 				{
 					debug_uart_->printf_P(PSTR("milesTag: resuming reception on channel %u\r\n"), index);
 				}
-				receiveHelper->resume_reception_(index);
+				receiveHelper->resume(index);
 				received_damage_ = 0;
 				return true;
 			}
