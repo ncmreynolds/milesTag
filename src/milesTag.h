@@ -132,8 +132,8 @@ class milesTagClass	{
 			uint8_t number_of_receivers_ = 0;										//Number of receiver channels, usually 1
 			#if defined SUPPORT_RMT_RECEIVE
 			rmt_receive_config_t global_receiver_config_ = {						//Global config across all receivers
-				.signal_range_min_ns = 2e3,											//Actually 600us but 2us is the smallest acceptable value in the SDK
-				.signal_range_max_ns = 2800e3,										//Actually 2400us but allow some margin
+				.signal_range_min_ns = 2000,											//Actually 600us but 2us is the smallest acceptable value in the SDK
+				.signal_range_max_ns = 2800000,										//Actually 2400us but allow some margin
 			};
 			//Receiver RMT data
 			rmt_symbol_word_t** received_symbols_;									//Symbol buffers
