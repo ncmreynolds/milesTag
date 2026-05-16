@@ -19,5 +19,6 @@ In many ways this is a case of "the tail wagging the dog" but for low volume hob
 
 ## Release History
 
+- 0.1.2 - Fix compilation error due to narrowing conversion on integer literals with recent versions of ESP-IDF
 - 0.1.1 - Functional send, receive and combo use for 'shot' packets, migrated to ESP-IDF v5.x / Arduino core v3.x (not backwards compatible)
 - 0.1.0 - Initial release, transmit only and specific to ESP-IDF v4.x / Arduino core v2.x
